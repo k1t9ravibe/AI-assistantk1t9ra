@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+        content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data: https://huggingface.co https://*.huggingface.co https://*.hf.co" />
   <title>AI Assistant</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -29,8 +29,10 @@
 
     <footer id="composer">
       <div id="attachments"></div>
+      <div id="voiceStatus" class="hidden"></div>
       <div class="input-row">
         <button id="attachBtn" class="icon" title="Прикрепить файл">📎</button>
+        <button id="micBtn" class="icon" title="Голосовой ввод (Ctrl+M)">🎤</button>
         <textarea id="input" rows="1" placeholder="Напиши сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
         <button id="sendBtn" class="primary">Отправить</button>
         <button id="stopBtn" class="danger hidden">Стоп</button>
@@ -72,6 +74,28 @@
         <small>Кликни в поле и нажми сочетание, например Ctrl+Shift+Space.</small>
       </label>
 
+      <label class="check">
+        <input type="checkbox" id="autostart" />
+        Запускать вместе с Windows (свёрнуто в трей)
+      </label>
+
+      <label>Голосовой ввод — язык
+        <select id="voiceLanguage">
+          <option value="russian">Русский</option>
+          <option value="kazakh">Қазақша</option>
+          <option value="english">English</option>
+          <option value="auto">Определять автоматически</option>
+        </select>
+      </label>
+
+      <label>Голосовой ввод — модель (работает на ПК, без интернета)
+        <select id="voiceModel">
+          <option value="onnx-community/whisper-base">Whisper Base — быстрая (~200 МБ)</option>
+          <option value="onnx-community/whisper-small">Whisper Small — точнее, медленнее (~600 МБ)</option>
+        </select>
+        <small>Модель скачивается один раз при первом нажатии на 🎤.</small>
+      </label>
+
       <label>Инструкция для ассистента (system prompt)
         <textarea id="systemPrompt" rows="4"></textarea>
       </label>
@@ -88,5 +112,6 @@
   <script src="../../node_modules/marked/lib/marked.umd.js"></script>
   <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
   <script src="renderer.js"></script>
+  <script type="module" src="voice.js"></script>
 </body>
 </html>

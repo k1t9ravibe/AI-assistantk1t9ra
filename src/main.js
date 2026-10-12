@@ -20,6 +20,9 @@ const DEFAULT_SETTINGS = {
   model: "claude-opus-5-5",
   effort: "medium",
   hotkey: "Control+Shift+Space",
+  autostart: false,
+  voiceModel: "onnx-community/whisper-base",
+  voiceLanguage: "russian",
   systemPrompt:
     "Ты — личный ИИ-ассистент пользователя на его компьютере. Отвечай по-русски, если пользователь не пишет на другом языке. Будь конкретным и полезным.",
 };
@@ -109,6 +112,7 @@ function chatSummary(c) {
 
 function createWindow() {
   win = new BrowserWindow({
+    show: false,
     width: 1000,
     height: 720,
     minWidth: 640,
@@ -125,6 +129,10 @@ function createWindow() {
     },
   });
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
+
+  // Разрешаем только микрофон (голосовой ввод) и запись в буфер обмена.
+  const allowed = new Set(["media", "clipboard-sanitized-write"]);
+  win.webContents.session.setPermissionRequestHandler((_wc, perm, cb) => cb(allowed.has(perm)));
 
   // Закрытие окна прячет его в трей, выход — через меню трея.
   win.on("close", (e) => {
@@ -187,6 +195,12 @@ function registerHotkey(accel) {
   }
 }
 
+// Автозапуск с Windows: при входе в систему приложение стартует свёрнутым в трей.
+function applyAutostart() {
+  const args = app.isPackaged ? ["--hidden"] : [app.getAppPath(), "--hidden"];
+  app.setLoginItemSettings({ openAtLogin: settings.autostart, path: process.execPath, args });
+}
+
 // ---------- attachments ----------
 
 function readAttachment(filePath) {
@@ -236,8 +250,12 @@ function registerIpc() {
 
   ipcMain.handle("settings:save", (_e, patch) => {
     if (typeof patch.apiKey === "string") setApiKey(patch.apiKey.trim());
-    for (const k of ["model", "effort", "systemPrompt"]) {
+    for (const k of ["model", "effort", "systemPrompt", "voiceModel", "voiceLanguage"]) {
       if (typeof patch[k] === "string") settings[k] = patch[k];
+    }
+    if (typeof patch.autostart === "boolean") {
+      settings.autostart = patch.autostart;
+      applyAutostart();
     }
     let hotkeyOk = true;
     if (typeof patch.hotkey === "string" && patch.hotkey !== settings.hotkey) {
@@ -392,6 +410,8 @@ if (!app.requestSingleInstanceLock()) {
     registerIpc();
     createWindow();
     createTray();
+    if (!process.argv.includes("--hidden")) win.once("ready-to-show", showWindow);
+    applyAutostart();
     if (!registerHotkey(settings.hotkey)) {
       console.warn("Не удалось зарегистрировать горячую клавишу", settings.hotkey);
     }

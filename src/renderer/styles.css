@@ -247,3 +247,10 @@ dialog input, dialog select, dialog textarea {
 dialog textarea { resize: vertical; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .error { color: var(--danger); font-size: 13px; min-height: 1em; margin: 0 0 8px; }
+
+/* ----- voice ----- */
+#micBtn.recording { animation: pulse 1s infinite; filter: drop-shadow(0 0 6px var(--danger)); }
+#micBtn:disabled { opacity: .4; cursor: wait; }
+@keyframes pulse { 50% { transform: scale(1.15); } }
+#voiceStatus { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+dialog label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; }

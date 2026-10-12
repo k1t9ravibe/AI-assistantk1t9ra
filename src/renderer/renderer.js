@@ -337,6 +337,9 @@ async function openSettings(message = "") {
   $("effort").value = s.effort;
   $("hotkey").value = s.hotkey;
   $("systemPrompt").value = s.systemPrompt;
+  $("autostart").checked = s.autostart;
+  $("voiceLanguage").value = s.voiceLanguage;
+  $("voiceModel").value = s.voiceModel;
   $("settingsError").textContent = message;
   $("settingsDialog").showModal();
 }
@@ -349,6 +352,9 @@ $("settingsForm").addEventListener("submit", async (e) => {
     effort: $("effort").value,
     hotkey: $("hotkey").value,
     systemPrompt: $("systemPrompt").value,
+    autostart: $("autostart").checked,
+    voiceLanguage: $("voiceLanguage").value,
+    voiceModel: $("voiceModel").value,
   };
   if ($("apiKey").value.trim()) patch.apiKey = $("apiKey").value;
   const { hotkeyOk, settings } = await window.api.saveSettings(patch);
@@ -417,11 +423,64 @@ $("input").addEventListener("paste", async (e) => {
   }
 });
 
+// ---------- voice ----------
+
+let voiceBusy = false;
+
+function setVoiceStatus(text) {
+  $("voiceStatus").textContent = text || "";
+  $("voiceStatus").classList.toggle("hidden", !text);
+}
+
+async function toggleVoice() {
+  if (voiceBusy || !window.voice) return;
+  const mic = $("micBtn");
+  if (!window.voice.isRecording()) {
+    try {
+      await window.voice.start();
+      mic.classList.add("recording");
+      setVoiceStatus("🔴 Говори… Нажми 🎤 или Ctrl+M ещё раз, чтобы закончить.");
+      // Пока человек говорит, заранее подгружаем модель.
+      const s = await window.api.getSettings();
+      window.voice.preload(s.voiceModel).catch(() => {});
+    } catch (err) {
+      setVoiceStatus("Нет доступа к микрофону. Проверь: Параметры Windows → Конфиденциальность → Микрофон.");
+      setTimeout(() => setVoiceStatus(""), 6000);
+    }
+    return;
+  }
+
+  mic.classList.remove("recording");
+  voiceBusy = true;
+  mic.disabled = true;
+  try {
+    const s = await window.api.getSettings();
+    setVoiceStatus("Распознаю речь…");
+    const text = await window.voice.stop({ model: s.voiceModel, language: s.voiceLanguage, onStatus: setVoiceStatus });
+    if (text) {
+      const input = $("input");
+      input.value = input.value.trim() ? `${input.value.trimEnd()} ${text}` : text;
+      autoGrow();
+      input.focus();
+      setVoiceStatus("");
+    } else {
+      setVoiceStatus("Ничего не расслышал — попробуй ещё раз.");
+      setTimeout(() => setVoiceStatus(""), 3000);
+    }
+  } catch (err) {
+    setVoiceStatus("Ошибка распознавания: " + (err.message || err));
+  } finally {
+    voiceBusy = false;
+    mic.disabled = false;
+  }
+}
+
 // ---------- wiring ----------
 
 $("newChatBtn").onclick = newChat;
 $("settingsBtn").onclick = () => openSettings();
 $("attachBtn").onclick = async () => addAttachments(await window.api.pickFiles());
+$("micBtn").onclick = toggleVoice;
 $("sendBtn").onclick = send;
 $("stopBtn").onclick = () => window.api.stop(state.chatId);
 $("input").addEventListener("input", autoGrow);
@@ -432,7 +491,8 @@ $("input").addEventListener("keydown", (e) => {
   }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey && e.key.toLowerCase() === "n") { e.preventDefault(); newChat(); }
+  if (e.ctrlKey && e.code === "KeyN") { e.preventDefault(); newChat(); }
+  if (e.ctrlKey && e.code === "KeyM") { e.preventDefault(); toggleVoice(); }
 });
 
 (async function init() {
