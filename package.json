@@ -1,0 +1,40 @@
+{
+  "name": "ai-assistant",
+  "productName": "AI Assistant",
+  "version": "0.1.0",
+  "description": "Личный ИИ-ассистент для ПК на базе Claude",
+  "main": "src/main.js",
+  "author": "k1t9ravibe",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
+    "dompurify": "^3.2.0",
+    "marked": "^15.0.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.0"
+  },
+  "build": {
+    "appId": "com.k1t9ravibe.aiassistant",
+    "productName": "AI Assistant",
+    "files": [
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

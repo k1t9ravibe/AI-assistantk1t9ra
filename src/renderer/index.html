@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>AI Assistant</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside id="sidebar">
+    <button id="newChatBtn" class="primary">+ Новый чат</button>
+    <ul id="chatList"></ul>
+    <button id="settingsBtn" class="ghost">⚙ Настройки</button>
+  </aside>
+
+  <main id="main">
+    <header id="chatHeader">
+      <span id="chatTitle">Новый чат</span>
+      <span id="hotkeyHint"></span>
+    </header>
+
+    <section id="messages">
+      <div id="empty" class="empty">
+        <h1>Чем помочь?</h1>
+        <p>Задай вопрос, перетащи файл (PDF, картинку, текст) в окно или прикрепи его скрепкой.</p>
+      </div>
+    </section>
+
+    <footer id="composer">
+      <div id="attachments"></div>
+      <div class="input-row">
+        <button id="attachBtn" class="icon" title="Прикрепить файл">📎</button>
+        <textarea id="input" rows="1" placeholder="Напиши сообщение… (Enter — отправить, Shift+Enter — новая строка)"></textarea>
+        <button id="sendBtn" class="primary">Отправить</button>
+        <button id="stopBtn" class="danger hidden">Стоп</button>
+      </div>
+    </footer>
+
+    <div id="dropOverlay" class="hidden">Отпусти, чтобы прикрепить файлы</div>
+  </main>
+
+  <dialog id="settingsDialog">
+    <form method="dialog" id="settingsForm">
+      <h2>Настройки</h2>
+
+      <label>API-ключ Anthropic
+        <input type="password" id="apiKey" placeholder="sk-ant-…  (оставь пустым, чтобы не менять)" autocomplete="off" />
+        <small id="apiKeyState"></small>
+        <small>Получить ключ: console.anthropic.com → API Keys. Хранится зашифрованным на этом ПК.</small>
+      </label>
+
+      <label>Модель
+        <select id="model">
+          <option value="claude-opus-5-5">Claude Opus 5.5 — самая умная</option>
+          <option value="claude-sonnet-5-5">Claude Sonnet 5.5 — быстрее и дешевле</option>
+          <option value="claude-haiku-5-5">Claude Haiku 5.5 — самая быстрая и дешёвая</option>
+        </select>
+      </label>
+
+      <label>Глубина размышлений
+        <select id="effort">
+          <option value="low">Низкая — быстрые ответы</option>
+          <option value="medium">Средняя</option>
+          <option value="high">Высокая — сложные задачи</option>
+          <option value="max">Максимальная</option>
+        </select>
+      </label>
+
+      <label>Горячая клавиша (показать/скрыть окно)
+        <input type="text" id="hotkey" placeholder="Нажми сочетание клавиш" readonly />
+        <small>Кликни в поле и нажми сочетание, например Ctrl+Shift+Space.</small>
+      </label>
+
+      <label>Инструкция для ассистента (system prompt)
+        <textarea id="systemPrompt" rows="4"></textarea>
+      </label>
+
+      <p id="settingsError" class="error"></p>
+
+      <div class="dialog-actions">
+        <button value="cancel" class="ghost" formnovalidate>Отмена</button>
+        <button id="saveSettingsBtn" value="default" class="primary">Сохранить</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="../../node_modules/marked/lib/marked.umd.js"></script>
+  <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
