@@ -1,9 +1,9 @@
 // Голосовой ввод: запись с микрофона и распознавание локальной моделью Whisper (transformers.js).
-// Модель скачивается один раз при первом использовании и дальше работает без интернета.
-import { pipeline, env } from "../../node_modules/@huggingface/transformers/dist/transformers.min.js";
+// Модель скачивается в браузер один раз при первом использовании, звук на сервер не уходит.
+import { pipeline, env } from "/vendor/transformers/transformers.min.js";
 
 env.allowLocalModels = false;
-env.backends.onnx.wasm.wasmPaths = new URL("../../node_modules/onnxruntime-web/dist/", import.meta.url).href;
+env.backends.onnx.wasm.wasmPaths = new URL("/vendor/onnxruntime-web/", location.origin).href;
 
 const SAMPLE_RATE = 16000;
 

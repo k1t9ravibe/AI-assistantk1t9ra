@@ -4,26 +4,30 @@
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data: https://huggingface.co https://*.huggingface.co https://*.hf.co" />
-  <title>AI Assistant</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ассистент закупщика</title>
+  <link rel="icon" href="/icon.png" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <aside id="sidebar">
     <button id="newChatBtn" class="primary">+ Новый чат</button>
     <ul id="chatList"></ul>
+    <button id="knowledgeBtn" class="ghost">📚 База знаний</button>
     <button id="settingsBtn" class="ghost">⚙ Настройки</button>
+    <button id="logoutBtn" class="ghost hidden">Выйти</button>
   </aside>
 
   <main id="main">
     <header id="chatHeader">
       <span id="chatTitle">Новый чат</span>
-      <span id="hotkeyHint"></span>
+      <span id="chatKb"></span>
     </header>
 
     <section id="messages">
       <div id="empty" class="empty">
-        <h1>Чем помочь?</h1>
-        <p>Задай вопрос, перетащи файл (PDF, картинку, текст) в окно или прикрепи его скрепкой.</p>
+        <h1>Ассистент закупщика</h1>
+        <p>Спроси о процедуре или сроках закупки, попроси составить техспецификацию, письмо или ответ на жалобу. Документацию, заявки, договоры и КП для проверки перетащи в окно или прикрепи скрепкой.</p>
       </div>
     </section>
 
@@ -46,12 +50,6 @@
     <form method="dialog" id="settingsForm">
       <h2>Настройки</h2>
 
-      <label>API-ключ Anthropic
-        <input type="password" id="apiKey" placeholder="sk-ant-…  (оставь пустым, чтобы не менять)" autocomplete="off" />
-        <small id="apiKeyState"></small>
-        <small>Получить ключ: console.anthropic.com → API Keys. Хранится зашифрованным на этом ПК.</small>
-      </label>
-
       <label>Модель
         <select id="model">
           <option value="claude-opus-5-5">Claude Opus 5.5 — самая умная</option>
@@ -69,16 +67,6 @@
         </select>
       </label>
 
-      <label>Горячая клавиша (показать/скрыть окно)
-        <input type="text" id="hotkey" placeholder="Нажми сочетание клавиш" readonly />
-        <small>Кликни в поле и нажми сочетание, например Ctrl+Shift+Space.</small>
-      </label>
-
-      <label class="check">
-        <input type="checkbox" id="autostart" />
-        Запускать вместе с Windows (свёрнуто в трей)
-      </label>
-
       <label>Голосовой ввод — язык
         <select id="voiceLanguage">
           <option value="russian">Русский</option>
@@ -88,16 +76,17 @@
         </select>
       </label>
 
-      <label>Голосовой ввод — модель (работает на ПК, без интернета)
+      <label>Голосовой ввод — модель (распознаёт речь прямо в браузере)
         <select id="voiceModel">
           <option value="onnx-community/whisper-base">Whisper Base — быстрая (~200 МБ)</option>
           <option value="onnx-community/whisper-small">Whisper Small — точнее, медленнее (~600 МБ)</option>
         </select>
-        <small>Модель скачивается один раз при первом нажатии на 🎤.</small>
+        <small>Модель скачивается в браузер один раз при первом нажатии на 🎤. Микрофон работает только по HTTPS или на localhost.</small>
       </label>
 
-      <label>Инструкция для ассистента (system prompt)
-        <textarea id="systemPrompt" rows="4"></textarea>
+      <label>Дополнительные указания ассистенту
+        <textarea id="systemPrompt" rows="4" placeholder="Например: наша организация — дочерняя компания фонда; в письмах подпись — «Директор департамента закупок»"></textarea>
+        <small>Дописываются к встроенной инструкции юриста-закупщика. Действуют в новых чатах.</small>
       </label>
 
       <p id="settingsError" class="error"></p>
@@ -109,8 +98,21 @@
     </form>
   </dialog>
 
-  <script src="../../node_modules/marked/lib/marked.umd.js"></script>
-  <script src="../../node_modules/dompurify/dist/purify.min.js"></script>
+  <dialog id="knowledgeDialog">
+    <h2>База знаний</h2>
+    <p class="kb-hint">Нормативные документы, на которые опирается ассистент: законы, правила закупок, типовые формы, внутренние положения. Поддерживаются PDF с текстовым слоем, DOCX, TXT и HTML (например, сохранённые страницы adilet.zan.kz). Документы можно перетащить сюда.</p>
+    <ul id="kbList"></ul>
+    <p id="kbTotal" class="kb-hint"></p>
+    <p id="kbError" class="error"></p>
+    <div class="dialog-actions">
+      <button id="kbAddBtn" class="primary">+ Добавить документы</button>
+      <button id="kbCloseBtn" class="ghost">Закрыть</button>
+    </div>
+  </dialog>
+
+  <script src="/vendor/marked/marked.umd.js"></script>
+  <script src="/vendor/dompurify/purify.min.js"></script>
+  <script src="api.js"></script>
   <script src="renderer.js"></script>
   <script type="module" src="voice.js"></script>
 </body>

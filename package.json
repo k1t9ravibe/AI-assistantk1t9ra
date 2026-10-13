@@ -1,41 +1,24 @@
 {
   "name": "ai-assistant",
-  "productName": "AI Assistant",
   "version": "0.1.0",
-  "description": "Личный ИИ-ассистент для ПК на базе Claude",
-  "main": "src/main.js",
+  "description": "ИИ-ассистент закупщика квазигосударственного сектора РК (веб-сайт на базе Claude)",
   "author": "k1t9ravibe",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
-    "dist": "electron-builder --win"
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "@huggingface/transformers": "^4.3.1",
     "dompurify": "^3.2.0",
-    "marked": "^15.0.0"
+    "express": "^4.21.2",
+    "mammoth": "^1.9.0",
+    "marked": "^15.0.0",
+    "pdfjs-dist": "^4.10.38"
   },
-  "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.0"
-  },
-  "build": {
-    "appId": "com.k1t9ravibe.aiassistant",
-    "productName": "AI Assistant",
-    "files": [
-      "src/**/*",
-      "node_modules/**/*"
-    ],
-    "win": {
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
-  },
-  "allowScripts": {
-    "electron@33.4.11": true
+  "private": true,
+  "engines": {
+    "node": ">=20.12"
   }
 }

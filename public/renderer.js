@@ -72,10 +72,30 @@ async function openChat(id) {
   if (!chat) return newChat();
   state.chatId = id;
   $("chatTitle").textContent = chat.title;
+  await updateChatKb(chat);
   renderMessages(chat.messages);
+  if (chat.streaming && !state.streaming.has(id)) {
+    appendNotice("Ассистент ещё дописывает ответ в этом чате — открой чат заново через минуту.");
+  }
   updateComposerState();
   refreshChatList();
   $("input").focus();
+}
+
+// Чат видит тот состав базы, который был на момент первого сообщения.
+async function updateChatKb(chat) {
+  const el = $("chatKb");
+  if (chat.kb && chat.messages.length) {
+    el.textContent = chat.kb.length ? `📚 ${chat.kb.length} док.` : "📚 база пуста";
+    el.title = chat.kb.length
+      ? "Документы базы знаний в этом чате:\n" + chat.kb.map((d) => "• " + d.title).join("\n")
+      : "Чат начат без документов в базе знаний";
+  } else {
+    const list = await window.api.listKnowledge();
+    el.textContent = list.length ? `📚 ${list.length} док.` : "📚 база пуста";
+    el.title = list.length ? "Документы базы знаний:\n" + list.map((d) => "• " + d.name).join("\n") : "Добавь нормативные документы: 📚 База знаний";
+  }
+  el.classList.toggle("warn", el.textContent.includes("пуста"));
 }
 
 // ---------- messages ----------
@@ -99,7 +119,7 @@ function renderMessages(messages) {
 function emptyState() {
   const div = document.createElement("div");
   div.className = "empty";
-  div.innerHTML = `<h1>Чем помочь?</h1><p>Задай вопрос, перетащи файл (PDF, картинку, текст) в окно или прикрепи его скрепкой.</p>`;
+  div.innerHTML = `<h1>Ассистент закупщика</h1><p>Спроси о процедуре или сроках закупки, попроси составить техспецификацию, письмо или ответ на жалобу. Документацию, заявки, договоры и КП для проверки перетащи в окно или прикрепи скрепкой.</p>`;
   return div;
 }
 
@@ -135,13 +155,56 @@ function messageEl(m) {
     const text = blocks.filter((b) => b.type === "text").map((b) => b.text).join("");
     const body = document.createElement("div");
     body.className = "body md";
-    body.innerHTML = renderMarkdown(text);
+    body.innerHTML = assistantHtml(blocks);
     enhanceCode(body);
     div.appendChild(body);
     div.appendChild(copyButton(() => text));
   }
   return div;
 }
+
+// Ответ с цитатами: после процитированного фрагмента ставится сноска [n],
+// а внизу — список источников с точным текстом нормы.
+function assistantHtml(blocks) {
+  const sources = [];
+  let md = "";
+  for (const b of blocks) {
+    if (b.type !== "text") continue;
+    md += b.text;
+    if (!b.citations?.length) continue;
+    const nums = [];
+    for (const c of b.citations) {
+      const key = `${c.document_index}|${c.cited_text}`;
+      let i = sources.findIndex((x) => x.key === key);
+      if (i < 0) i = sources.push({ key, title: c.document_title || "Документ", text: c.cited_text.trim(), page: c.start_page_number }) - 1;
+      if (!nums.includes(i + 1)) nums.push(i + 1);
+    }
+    const tail = md.match(/\s*$/)[0];
+    md = md.slice(0, md.length - tail.length) + nums.map((n) => `<sup class="cite" data-n="${n}">[${n}]</sup>`).join("") + tail;
+  }
+  let html = renderMarkdown(md);
+  if (sources.length) {
+    const items = sources
+      .map((x, i) => `<li data-n="${i + 1}"><b>${escapeHtml(x.title)}</b>${x.page ? `, стр. ${x.page}` : ""}<div class="quote">«${escapeHtml(x.text)}»</div></li>`)
+      .join("");
+    html += `<details class="sources"><summary>Источники (${sources.length})</summary><ol>${items}</ol></details>`;
+  }
+  return html;
+}
+
+// Клик по сноске раскрывает список источников и подсвечивает нужный.
+document.addEventListener("click", (e) => {
+  const sup = e.target.closest?.("sup.cite");
+  if (!sup) return;
+  const details = sup.closest(".msg")?.querySelector("details.sources");
+  const li = details?.querySelector(`li[data-n="${sup.dataset.n}"]`);
+  if (!li) return;
+  details.open = true;
+  li.scrollIntoView({ block: "center", behavior: "smooth" });
+  li.classList.remove("flash");
+  void li.offsetWidth;
+  li.classList.add("flash");
+});
 
 function streamingEl(text) {
   const div = document.createElement("div");
@@ -234,12 +297,6 @@ async function send() {
   if (!text.trim() && !attachments.length) return;
   if (state.streaming.has(state.chatId)) return;
 
-  const settings = await window.api.getSettings();
-  if (!settings.hasApiKey) {
-    openSettings("Сначала вставь API-ключ Anthropic.");
-    return;
-  }
-
   const chatId = state.chatId;
   input.value = "";
   autoGrow();
@@ -264,7 +321,11 @@ async function send() {
 
   try {
     const summary = await window.api.send(chatId, text, attachments);
-    if (summary && chatId === state.chatId) $("chatTitle").textContent = summary.title;
+    if (summary && chatId === state.chatId) {
+      $("chatTitle").textContent = summary.title;
+      const chat = await window.api.getChat(chatId);
+      if (chat) updateChatKb(chat);
+    }
     refreshChatList();
   } catch (err) {
     state.streaming.delete(chatId);
@@ -324,20 +385,13 @@ window.api.onError(({ chatId, error }) => {
   }
 });
 
-window.api.onFocusInput(() => $("input").focus());
-window.api.onNewChat(() => newChat());
-
 // ---------- settings ----------
 
 async function openSettings(message = "") {
   const s = await window.api.getSettings();
-  $("apiKey").value = "";
-  $("apiKeyState").textContent = s.hasApiKey ? "✓ Ключ сохранён" : "Ключ не задан";
   $("model").value = s.model;
   $("effort").value = s.effort;
-  $("hotkey").value = s.hotkey;
   $("systemPrompt").value = s.systemPrompt;
-  $("autostart").checked = s.autostart;
   $("voiceLanguage").value = s.voiceLanguage;
   $("voiceModel").value = s.voiceModel;
   $("settingsError").textContent = message;
@@ -350,45 +404,94 @@ $("settingsForm").addEventListener("submit", async (e) => {
   const patch = {
     model: $("model").value,
     effort: $("effort").value,
-    hotkey: $("hotkey").value,
     systemPrompt: $("systemPrompt").value,
-    autostart: $("autostart").checked,
     voiceLanguage: $("voiceLanguage").value,
     voiceModel: $("voiceModel").value,
   };
-  if ($("apiKey").value.trim()) patch.apiKey = $("apiKey").value;
-  const { hotkeyOk, settings } = await window.api.saveSettings(patch);
-  if (!hotkeyOk) {
-    $("settingsError").textContent = "Это сочетание занято другой программой — выбери другое.";
-    $("hotkey").value = settings.hotkey;
-    return;
+  try {
+    await window.api.saveSettings(patch);
+    $("settingsDialog").close();
+  } catch (err) {
+    $("settingsError").textContent = String(err.message || err);
   }
-  updateHotkeyHint(settings.hotkey);
-  $("settingsDialog").close();
 });
 
-function updateHotkeyHint(hotkey) {
-  $("hotkeyHint").textContent = hotkey ? `${hotkey.replace("Control", "Ctrl")} — показать/скрыть` : "";
+// ---------- knowledge base ----------
+
+async function renderKnowledge() {
+  const list = await window.api.listKnowledge();
+  const ul = $("kbList");
+  ul.innerHTML = "";
+  if (!list.length) {
+    ul.innerHTML = `<li class="kb-empty">База пуста — ассистент не сможет ссылаться на нормы.</li>`;
+  }
+  for (const d of list) {
+    const li = document.createElement("li");
+    li.innerHTML = `<span class="title"></span><span class="size">≈${(d.tokens / 1000).toFixed(0)} тыс. токенов</span>
+      <button class="icon small rename" title="Переименовать">✎</button>
+      <button class="icon small del" title="Убрать из базы">✕</button>`;
+    li.querySelector(".title").textContent = d.name;
+    // Название — то, как ассистент будет ссылаться на документ в ответах.
+    li.querySelector(".rename").onclick = () => {
+      const span = li.querySelector(".title");
+      const input = document.createElement("input");
+      input.value = d.name;
+      input.className = "rename-input";
+      span.replaceWith(input);
+      input.focus();
+      input.select();
+      const finish = async (save) => {
+        input.onblur = null;
+        if (save && input.value.trim()) await window.api.renameKnowledge(d.id, input.value);
+        renderKnowledge();
+      };
+      input.onkeydown = (e) => {
+        if (e.key === "Enter") finish(true);
+        if (e.key === "Escape") { e.preventDefault(); finish(false); }
+      };
+      input.onblur = () => finish(true);
+    };
+    li.querySelector(".del").onclick = async () => {
+      if (!confirm(`Убрать «${d.name}» из базы знаний?`)) return;
+      await window.api.removeKnowledge(d.id);
+      renderKnowledge();
+    };
+    ul.appendChild(li);
+  }
+  const total = list.reduce((sum, d) => sum + d.tokens, 0);
+  $("kbTotal").textContent = list.length
+    ? `Всего ≈${(total / 1000).toFixed(0)} тыс. токенов из ~1 000 тыс. доступных модели. ` +
+      (total > 700000 ? "⚠ База близка к пределу: на переписку и вложения останется мало места. " : "") +
+      "Изменения применяются к новым чатам."
+    : "";
 }
 
-$("hotkey").addEventListener("keydown", (e) => {
-  e.preventDefault();
-  if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
-  if (e.key === "Backspace" || e.key === "Delete") { $("hotkey").value = ""; return; }
-  const mods = [];
-  if (e.ctrlKey) mods.push("Control");
-  if (e.altKey) mods.push("Alt");
-  if (e.shiftKey) mods.push("Shift");
-  if (e.metaKey) mods.push("Super");
-  if (!mods.length) return; // глобальная клавиша без модификатора мешала бы обычной печати
-  let key = e.code;
-  if (/^Key[A-Z]$/.test(key)) key = key.slice(3);
-  else if (/^Digit\d$/.test(key)) key = key.slice(5);
-  else if (/^F\d{1,2}$/.test(key) || key === "Space") key = key;
-  else if (key.startsWith("Arrow")) key = key.slice(5);
-  else key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-  $("hotkey").value = [...mods, key].join("+");
-});
+async function addKnowledge(files) {
+  $("kbError").textContent = "Добавляю…";
+  $("kbAddBtn").disabled = true;
+  try {
+    const { errors } = await window.api.addKnowledge(files);
+    $("kbError").textContent = errors.join("\n");
+  } catch (err) {
+    $("kbError").textContent = String(err.message || err);
+  } finally {
+    $("kbAddBtn").disabled = false;
+    renderKnowledge();
+  }
+}
+
+async function openKnowledge() {
+  $("kbError").textContent = "";
+  await renderKnowledge();
+  $("knowledgeDialog").showModal();
+}
+
+$("kbAddBtn").onclick = () => addKnowledge(null);
+$("kbCloseBtn").onclick = async () => {
+  $("knowledgeDialog").close();
+  const chat = state.chatId && (await window.api.getChat(state.chatId));
+  if (chat) updateChatKb(chat);
+};
 
 // ---------- drag & drop ----------
 
@@ -407,7 +510,10 @@ window.addEventListener("drop", async (e) => {
   dragDepth = 0;
   $("dropOverlay").classList.add("hidden");
   const files = [...(e.dataTransfer?.files || [])];
-  if (files.length) addAttachments(await window.api.readFiles(files));
+  if (!files.length) return;
+  // Пока открыта база знаний, перетащенные файлы добавляются в неё, а не в сообщение.
+  if ($("knowledgeDialog").open) addKnowledge(files);
+  else addAttachments(await window.api.readFiles(files));
 });
 
 // Вставка картинки из буфера обмена (Ctrl+V скриншота).
@@ -479,6 +585,12 @@ async function toggleVoice() {
 
 $("newChatBtn").onclick = newChat;
 $("settingsBtn").onclick = () => openSettings();
+$("logoutBtn").onclick = async () => {
+  await window.api.logout();
+  location.href = "/login.html";
+};
+$("knowledgeBtn").onclick = openKnowledge;
+$("chatKb").onclick = openKnowledge;
 $("attachBtn").onclick = async () => addAttachments(await window.api.pickFiles());
 $("micBtn").onclick = toggleVoice;
 $("sendBtn").onclick = send;
@@ -491,15 +603,15 @@ $("input").addEventListener("keydown", (e) => {
   }
 });
 document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey && e.code === "KeyN") { e.preventDefault(); newChat(); }
+  if (e.altKey && e.code === "KeyN") { e.preventDefault(); newChat(); }
   if (e.ctrlKey && e.code === "KeyM") { e.preventDefault(); toggleVoice(); }
 });
 
 (async function init() {
   const settings = await window.api.getSettings();
-  updateHotkeyHint(settings.hotkey);
+  $("logoutBtn").classList.toggle("hidden", !settings.hasPassword);
   const list = await window.api.listChats();
   const firstEmpty = list.length ? null : await window.api.createChat();
   await openChat(firstEmpty ? firstEmpty.id : list[0].id);
-  if (!settings.hasApiKey) openSettings("Добро пожаловать! Вставь API-ключ Anthropic, чтобы начать.");
+  if (!settings.hasApiKey) appendNotice("На сервере не задан ANTHROPIC_API_KEY — впиши ключ в файл .env и перезапусти сервер.", "error");
 })();
